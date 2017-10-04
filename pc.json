@@ -1,30 +1,30 @@
 {
     "due_date": "2012-01-01", 
-    "accounts": {
-        "gnc_account": [
+    "gnc_accounts": {
+        "bank": [
             "Aktiva:Barvermögen:MLP:Abwicklungskonto", 
             "Aktiva:Barvermögen:Deutsche Bank:Depotkonto"
         ], 
-        "gnc_day2day": [
+        "money-market": [
             "Aktiva:Barvermögen:MLP:Tagesgeldkonto"
         ],
-        "gnc_interest": [
+        "interest": [
             "Erträge:Zinsen:MLP Konten",
             "Erträge:Zinsen:Tagesgeld MLP"
 
         ],
-        "gnc_charge": [
+        "commission": [
             "Aufwendungen:Bankgebühren:MLP:Wertpapierdepot", 
             "Aufwendungen:Bankgebühren:MLP:Konten", 
             "Aufwendungen:Bankgebühren:Deutsche Bank:Depot DB"
         ], 
-        "gnc_tax": [
+        "tax": [
             "Aufwendungen:Steuern:Kapitalertragssteuer", 
             "Aufwendungen:Steuern:Solidaritätszuschlag", 
             "Aufwendungen:Steuern:Quellensteuer"
         ], 
-        "gnc_portfolio": "Aktiva:Investments:Wertpapierdepot", 
-        "gnc_dividend": "Erträge:Dividende:Wertpapierdepot"
+        "investment": "Aktiva:Investments:Wertpapierdepot",
+        "dividend": "Erträge:Dividende:Wertpapierdepot"
     }, 
     "gnc_file": "Haushalt_sq3.gnucash"
 }
