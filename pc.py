@@ -27,7 +27,7 @@ import csv
 import re
 import difflib
 import piecash
-import config
+from gc2pp import config
 
 
 def get_date(due_date):
@@ -116,7 +116,7 @@ def export_investment(accounts, due_date):
                         deal = 'Einlieferung'
                     total = stock_value
 
-                stock = stock_account.commodity
+                stock = stock_account._commodity
 
                 row = {'Datum': tr.post_date.strftime('%Y-%m-%d'),
                        'Typ': deal,

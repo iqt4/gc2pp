@@ -102,21 +102,6 @@ class GncBook(ABC):
     """
     The GncBook defines general interface to GnuCash data.
     """
-    _driver = set()
-
-    @classmethod
-    def register(cls, func):
-        cls._driver.add(func)
-
-    @classmethod
-    def open(cls, filename: str):
-        book = None
-        for func in cls._driver:
-            book = func(filename)
-            if book is not None:
-                break
-
-        return book
 
     @property
     @abstractmethod
@@ -127,7 +112,3 @@ class GncBook(ABC):
     @abstractmethod
     def accounts(self) -> list[GncAccount]:
         pass
-
-    def get_account(self, act_fullname):
-        return
-

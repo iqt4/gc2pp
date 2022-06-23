@@ -4,11 +4,11 @@ from functools import lru_cache
 import datetime
 from decimal import Decimal
 from gnucashxml import gnucashxml
-from book import GncBook, GncCommodity, GncAccount, GncSplit, GncTransaction
+from .gnc_book import GncBook, GncCommodity, GncAccount, GncSplit, GncTransaction
 
 
 class XMLCommodity(GncCommodity):
-    _commodity_index = {}
+    _commodity_index: dict[gnucashxml.Commodity, XMLCommodity] = {}
 
     def __init__(self, gnc_cmdty: gnucashxml.Commodity):
         self._commodity = gnc_cmdty
@@ -36,35 +36,35 @@ class XMLCommodity(GncCommodity):
 
 
 class XMLAccount(GncAccount):
-    _account_index = {}
+    _account_index: dict[gnucashxml.Account, XMLAccount] = {}
 
     def __init__(self, gnc_act: gnucashxml.Account) -> None:
-        self._gnc_act: gnucashxml.Account = gnc_act
+        self._account: gnucashxml.Account = gnc_act
         self._account_index.setdefault(gnc_act, self)
 
     @property
     def name(self):
-        return self._gnc_act.name
+        return self._account.name
 
     @property
     def fullname(self):
-        return self._gnc_act.fullname
+        return self._account.fullname
 
     @property
     def type(self):
-        return self._gnc_act.type
+        return self._account.type
 
     @property
     def commodity(self) -> GncCommodity:
-        return XMLCommodity.get_commodity(self._gnc_act.commodity)
+        return XMLCommodity.get_commodity(self._account.commodity)
 
     @property
     def children(self) -> list[GncAccount]:
-        return [self.get_account(a) for a in self._gnc_act.children]
+        return [self.get_account(a) for a in self._account.children]
 
     @property
     def splits(self) -> list[GncSplit]:
-        return [XMLSplit(a) for a in self._gnc_act.splits]
+        return [XMLSplit(a) for a in self._account.splits]
 
     @classmethod
     def get_account(cls, gnc_act) -> GncAccount:
@@ -118,7 +118,7 @@ class XMLBook(GncBook):
     """
 
     def __init__(self, xml_filename: str) -> None:
-        self._book: gnucashxml.book = gnucashxml.load(xml_filename)
+        self._book: gnucashxml.Book = gnucashxml.load(xml_filename)
         self._commodities = [XMLCommodity(c) for c in self._book.commodities]
         self._accounts = [XMLAccount(a) for a in self._book.accounts]
 
