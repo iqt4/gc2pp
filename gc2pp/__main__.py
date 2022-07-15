@@ -2,7 +2,7 @@ from pathlib import Path
 from config import ConfigurationLoader
 from book import GncBookFactory
 
-print(Path('./data').resolve())
+print(Path('../data').resolve())
 config = ConfigurationLoader.read()
 filename = "/Users/dirk/Development/PycharmProjects/Haushalt.gnucash.gz"
 print(Path(filename).resolve(strict=True))

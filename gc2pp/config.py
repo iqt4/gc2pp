@@ -1,114 +1,147 @@
 from __future__ import annotations
-from sys import argv
+import argparse
+import enum
 import json
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import date, timedelta, MINYEAR
 from pathlib import Path
-from book import GncBook, GncAccount
+from book import GncType, GncObject, GncBookFactory
 
 
-class PPAccount(object):
-    _name: str
-    _accounts: list[GncAccount]
+class PPType(enum.Enum):
+    ACCOUNT = "account"
+    PORTFOLIO = "portfolio"
+    INTEREST = "interest"
+    FEES = "fees"
+    TAXES = "taxes"
+    DIVIDENDS = "dividends"
 
-    def __init__(self, name, accounts) -> None:
-        self._name = name
-        self._accounts = accounts
 
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def accounts(self) -> list[GncAccount]:
-        return self._accounts
+@dataclass
+class MappingItem:
+    pp_type: PPType
+    gnc_account_names: list[str]
+    pp_name: str = None
 
 
 class Configuration(object):
+    """Container for all configuration objects"""
 
-    def __init__(self):
-        self._type: str
-        filename: str
+    def __init__(self) -> None:
+        """We need configuration parameters"""
+        self.filename = None
+        self.date: date = date(MINYEAR, 1, 1)
+        self.items: dict[MappingItem] = {}
+        self.gnc_object: GncObject = GncObject()
 
 
-class IConfigReader(ABC):
-    @staticmethod
+class IConfigHandler(ABC):
+    """Abstract Handler"""
+
+    def __init__(self, successor) -> None:
+        self._successor = successor
+
+    def handle(self, request: Configuration):
+        handled = self._handle(request)
+
+        if not handled and self._successor.handle is not None:
+            self._successor.handle(request)
+
     @abstractmethod
-    def read(conf_obj):
-        """Read configuration"""
+    def _handle(self, request):
+        pass
 
 
-class DefaultConfig(IConfigReader):
-    """Hardcoded default configuration"""
+class ConfigDefault(IConfigHandler):
+    """Set the default parameters"""
+
+    def _handle(self, conf: Configuration):
+
+        conf.date = date.today() - timedelta(days=30)
+
+        filename = Path('./gc2pp.json').resolve()
+        if filename.is_file():
+            conf.filename = filename
+
+
+class ConfigCommandLine(IConfigHandler):
+    """Configuration from arguments"""
+
+    def _handle(self, conf: Configuration):
+        parser = argparse.ArgumentParser(description='Convert Gnucash file to Portfolio Performance CSV')
+        parser.add_argument('-c', '--conf', help='configuration file')
+        parser.add_argument('-d', '--date', help='first conversion date')
+        args = parser.parse_args()
+
+        if conf.date is None and args.date is not None:
+            # ToDo: Implement date parameter
+            pass
+
+        if args.conf is not None:
+            filename = Path(args.conf).resolve()
+            if filename.is_file():
+                conf.filename = filename
+
+
+class ConfigFile(IConfigHandler):
+    """Read from configuration file"""
+
+    def _handle(self, conf: Configuration):
+        def item_decoder(dct: dict):
+            if "pp_type" in dct:
+                try:
+                    pp_type = PPType(dct["pp_type"])
+                    if pp_type in (pp_type.ACCOUNT, pp_type.PORTFOLIO) and "pp_name" in dct:
+                        dct = MappingItem(pp_type, dct["gnc_account_names"], dct["pp_name"])
+                    else:
+                        dct = MappingItem(pp_type, dct["gnc_account_names"])
+                except ValueError:
+                    print(f"Invalid item: {dct}")
+                    dct = None
+
+            elif "gnc_type" in dct:
+                try:
+                    gnc_type = GncType(dct["gnc_type"])
+                    gnc_filename = Path(dct["gnc_filename"]).resolve()
+                    if gnc_filename.is_file():
+                        dct = GncObject(gnc_type, gnc_filename)
+                    else:
+                        dct = None
+                except ValueError:
+                    print(f"Invalid item: {dct}")
+                    dct = None
+
+            return dct
+
+        if conf.filename is not None:
+            with open(conf.filename, 'r') as f:
+                json_conf = json.load(f, object_hook=item_decoder)
+                conf.items = json_conf["items"]
+                conf.gnc_object = json_conf["gnc_object"]
+
+        # ToDo: Sanity check of the items
+
+        return True
+
+
+class ConfigurationFactory(object):
+
     @staticmethod
-    def read(conf_obj):
-        default_configuration = """{
-            "gnc_book" : {
-                "filetype": "xml",
-                "filename": "ttt"
-            },
-            "accounts": [
-                {
-                    "Depotkonto": [
-                        "Aktiva:Barvermögen:MLP:Abwicklungskonto",
-                        "Aktiva:Barvermögen:Deutsche Bank:Depotkonto"
-                    ]
-                },
-                {
-                    "Tagesgeld": [
-                        "Aktiva:Barvermögen:MLP:Tagesgeldkonto"
-                    ]
-                }
-            ],
-            "portfolios": [
-                {
-                    "Depot": [
-                        "Aktiva:Investments:Wertpapierdepot"
-                    ]
-                }    
-            ],
-            "interest": [
-                "Erträge:Zinsen:MLP Konten",
-                "Erträge:Zinsen:Tagesgeld MLP"
-            ],
-            "fees": [
-                "Aufwendungen:Bankgebühren:MLP:Wertpapierdepot",
-                "Aufwendungen:Bankgebühren:MLP:Konten",
-                "Aufwendungen:Bankgebühren:Deutsche Bank:Depot DB"
-            ],
-            "tax": [
-                "Aufwendungen:Steuern:Kapitalertragssteuer",
-                "Aufwendungen:Steuern:Solidaritätszuschlag",
-                "Aufwendungen:Steuern:Quellensteuer"
-            ],
-            "dividends": [
-                "Erträge:Dividende:Wertpapierdepot"
-            ]
-        }"""
-
-        conf_json = json.loads(default_configuration)
+    def load() -> Configuration:
+        c = Configuration()
+        handler = ConfigDefault(ConfigCommandLine(ConfigFile(None)))
+        handler.handle(c)
+        return c
 
 
-class ConfigurationLoader:
-    @staticmethod
-    def read():
+if __name__ == '__main__':
+    c = ConfigurationFactory.load()
 
-        return DefaultConfig.read(conf_obj)
+    pass
 
 
-# ini = {
-#     "gnc_file": "Haushalt_sq3.gnucash",
-#     "due_date": "2012-01-01"
-# }
 
-# def load_ini():
-#     if len(sys.argv) > 1:
-#         ini = sys.argv[1]
-#     else:
-#         ini = 'pc.json'
-#
-#     with open(ini, 'r') as f:
-#         return json.load(f)
-#
 # def get_accounts(book):
 #     accounts = dict()
 #
