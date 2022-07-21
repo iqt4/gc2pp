@@ -12,8 +12,8 @@ class GncType(enum.Enum):
 
 @dataclass
 class GncObject:
-    filetype: GncType = GncType.XML
-    filename: Path = Path()
+    filetype: GncType = None
+    filename: Path = None
 
 
 class GncBookFactory:

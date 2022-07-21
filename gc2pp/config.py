@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import date, timedelta, MINYEAR
 from pathlib import Path
+from urllib.parse import urlparse
 from book import GncType, GncObject, GncBookFactory
 
 
@@ -70,18 +71,32 @@ class ConfigCommandLine(IConfigHandler):
 
     def _handle(self, conf: Configuration):
         parser = argparse.ArgumentParser(description='Convert Gnucash file to Portfolio Performance CSV')
-        parser.add_argument('-c', '--conf', help='configuration file')
+        parser.add_argument('-c', '--conf', help='Configuration file')
+        parser.add_argument('-u', '--url', help='Gnucash format [file://filename]')
         parser.add_argument('-d', '--date', help='first conversion date')
         args = parser.parse_args()
-
-        if conf.date is None and args.date is not None:
-            # ToDo: Implement date parameter
-            pass
 
         if args.conf is not None:
             filename = Path(args.conf).resolve()
             if filename.is_file():
                 conf.filename = filename
+            else:
+                raise FileNotFoundError
+
+        if args.url is not None:
+            url = urlparse(args.uri, scheme='file')
+            if url.scheme == 'file':
+                filename = Path(url.netloc).resolve()
+                if filename.is_file():
+                    conf.gnc_object = GncObject(filetype=GncType.XML, filename=filename)
+                else:
+                    raise FileNotFoundError
+            else:
+                raise ValueError(url)
+
+        if args.date is not None:
+            # ToDo: Implement date parameter
+            pass
 
 
 class ConfigFile(IConfigHandler):
@@ -118,7 +133,8 @@ class ConfigFile(IConfigHandler):
             with open(conf.filename, 'r') as f:
                 json_conf = json.load(f, object_hook=item_decoder)
                 conf.items = json_conf["items"]
-                conf.gnc_object = json_conf["gnc_object"]
+                if conf.gnc_object is not None and json_conf["gnc_object"] is not None:
+                    conf.gnc_object = json_conf["gnc_object"]
 
         # ToDo: Sanity check of the items
 
@@ -139,7 +155,6 @@ if __name__ == '__main__':
     c = ConfigurationFactory.load()
 
     pass
-
 
 
 # def get_accounts(book):
