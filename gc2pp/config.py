@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta, MINYEAR
 from pathlib import Path
 from urllib.parse import urlparse
-from book import GncType, GncObject, GncBookFactory
+from book import GncType, GncObject
 
 
 class PPType(enum.Enum):
@@ -31,6 +31,7 @@ class Configuration(object):
 
     def __init__(self) -> None:
         """We need configuration parameters"""
+        # configuration filename
         self.filename = None
         self.date: date = date(MINYEAR, 1, 1)
         self.items: dict[MappingItem] = {}
@@ -55,15 +56,10 @@ class IConfigHandler(ABC):
 
 
 class ConfigDefault(IConfigHandler):
-    """Set the default parameters"""
+    """Safe default parameters"""
 
     def _handle(self, conf: Configuration):
-
         conf.date = date.today() - timedelta(days=30)
-
-        filename = Path('./data/gc2pp.json').resolve()
-        if filename.is_file():
-            conf.filename = filename
 
 
 class ConfigCommandLine(IConfigHandler):
@@ -71,19 +67,20 @@ class ConfigCommandLine(IConfigHandler):
 
     def _handle(self, conf: Configuration):
         parser = argparse.ArgumentParser(description='Convert Gnucash file to Portfolio Performance CSV')
-        parser.add_argument('-c', '--conf', help='Configuration file')
-        parser.add_argument('-u', '--uri', help='Gnucash format [file://filename]')
-        parser.add_argument('-d', '--date', help='first conversion date')
+        parser.add_argument('-c', '--conf', help='Configuration file', default='./data/gc2pp.json')
+        parser.add_argument('-u', '--uri', help='Gnucash source format [file://filename]')
+        parser.add_argument('-d', '--date', help='First conversion date')
         args = parser.parse_args()
 
-        if args.conf is not None:
-            filename = Path(args.conf).resolve()
-            if filename.is_file():
-                conf.filename = filename
-            else:
-                raise FileNotFoundError
+        # We need a configuration file
+        filename = Path(args.conf).resolve()
+        if filename.is_file():
+            conf.filename = filename
+        else:
+            raise FileNotFoundError
 
         if args.uri is not None:
+            # ToDo only xml is valid for now. See https://www.gnucash.org/docs/v5/C/gnucash-guide/basics-files1.html
             url = urlparse(args.uri, scheme='file')
             if url.scheme == 'file':
                 filename = Path(url.path).resolve()
@@ -133,12 +130,10 @@ class ConfigFile(IConfigHandler):
             with open(conf.filename, 'r') as f:
                 json_conf = json.load(f, object_hook=item_decoder)
                 conf.items = json_conf["items"]
+                # ToDo: Sanity check of the items
+
                 if conf.gnc_object is not None and json_conf["gnc_object"] is not None:
                     conf.gnc_object = json_conf["gnc_object"]
-
-        # ToDo: Sanity check of the items
-
-        return True
 
 
 class ConfigurationFactory(object):
@@ -146,7 +141,7 @@ class ConfigurationFactory(object):
     @staticmethod
     def load() -> Configuration:
         c = Configuration()
-        handler = ConfigDefault(ConfigCommandLine(ConfigFile(None)))
+        handler = ConfigCommandLine(ConfigFile(ConfigDefault(None)))
         handler.handle(c)
         return c
 
