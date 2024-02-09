@@ -61,7 +61,7 @@ class ConfigDefault(IConfigHandler):
 
         conf.date = date.today() - timedelta(days=30)
 
-        filename = Path('./gc2pp.json').resolve()
+        filename = Path('./data/gc2pp.json').resolve()
         if filename.is_file():
             conf.filename = filename
 
@@ -72,7 +72,7 @@ class ConfigCommandLine(IConfigHandler):
     def _handle(self, conf: Configuration):
         parser = argparse.ArgumentParser(description='Convert Gnucash file to Portfolio Performance CSV')
         parser.add_argument('-c', '--conf', help='Configuration file')
-        parser.add_argument('-u', '--url', help='Gnucash format [file://filename]')
+        parser.add_argument('-u', '--uri', help='Gnucash format [file://filename]')
         parser.add_argument('-d', '--date', help='first conversion date')
         args = parser.parse_args()
 
@@ -83,10 +83,10 @@ class ConfigCommandLine(IConfigHandler):
             else:
                 raise FileNotFoundError
 
-        if args.url is not None:
+        if args.uri is not None:
             url = urlparse(args.uri, scheme='file')
             if url.scheme == 'file':
-                filename = Path(url.netloc).resolve()
+                filename = Path(url.path).resolve()
                 if filename.is_file():
                     conf.gnc_object = GncObject(filetype=GncType.XML, filename=filename)
                 else:
