@@ -10,24 +10,33 @@ from urllib.parse import urlparse
 from book import GncType, GncObject
 
 
-class PPType(enum.Enum):
+class MappingType(enum.Enum):
+    # PP transaction owners mapped to GncAccounts
     ACCOUNT = "account"
     PORTFOLIO = "portfolio"
-    INTEREST = "interest"
-    FEES = "fees"
-    TAXES = "taxes"
-    DIVIDENDS = "dividends"
+    
+    # PP AccountTransaction types mapped to GncAccounts
+    INTEREST = "interest" # INTEREST(false), INTEREST_CHARGE(true)
+    FEES = "fees" # FEES(true), FEES_REFUND(false)
+    TAXES = "taxes" # TAXES(true), TAX_REFUND(false)
+    DIVIDENDS = "dividends" # DIVIDENDS(false)
 
+    # Other PP AccountTransaction types are derived from transfer between GncAccounts
+    """
+    DEPOSIT(false), REMOVAL(true), --> Transfer into/out of the account
+    BUY(true), SELL(false), --> Transfer between account and portfolio (incl. tax and fees)
+    TRANSFER_IN(false), TRANSFER_OUT(true) --> Transfer between accounts
+    """        
 
 @dataclass
 class MappingItem:
-    pp_type: PPType
+    type: MappingType
     gnc_account_names: list[str]
     pp_name: str = None
-
+    
 
 class Configuration(object):
-    """Container for all configuration objects"""
+    """Container for all configuration items"""
 
     def __init__(self) -> None:
         """We need configuration parameters"""
@@ -35,7 +44,7 @@ class Configuration(object):
         self.filename = None
         self.date: date = date(MINYEAR, 1, 1)
         self.items: dict[MappingItem] = {}
-        self.gnc_object: GncObject = GncObject()
+        self.gnc_object: GncObject = None
 
 
 class IConfigHandler(ABC):
@@ -47,7 +56,7 @@ class IConfigHandler(ABC):
     def handle(self, request: Configuration):
         handled = self._handle(request)
 
-        if not handled and self._successor.handle is not None:
+        if not handled and self._successor is not None:
             self._successor.handle(request)
 
     @abstractmethod
@@ -81,11 +90,11 @@ class ConfigCommandLine(IConfigHandler):
 
         if args.uri is not None:
             # ToDo only xml is valid for now. See https://www.gnucash.org/docs/v5/C/gnucash-guide/basics-files1.html
-            url = urlparse(args.uri, scheme='file')
-            if url.scheme == 'file':
+            url = urlparse(args.uri, scheme='xml')
+            if url.scheme == 'xml':
                 filename = Path(url.path).resolve()
                 if filename.is_file():
-                    conf.gnc_object = GncObject(filetype=GncType.XML, filename=filename)
+                    conf.gnc_object = GncObject(gnc_type=GncType.XML, filename=filename)
                 else:
                     raise FileNotFoundError
             else:
@@ -103,11 +112,11 @@ class ConfigFile(IConfigHandler):
         def item_decoder(dct: dict):
             if "pp_type" in dct:
                 try:
-                    pp_type = PPType(dct["pp_type"])
-                    if pp_type in (pp_type.ACCOUNT, pp_type.PORTFOLIO) and "pp_name" in dct:
-                        dct = MappingItem(pp_type, dct["gnc_account_names"], dct["pp_name"])
+                    type = MappingType(dct["pp_type"])
+                    if type in (type.ACCOUNT, type.PORTFOLIO) and "pp_name" in dct:
+                        dct = MappingItem(type, dct["gnc_account_names"], dct["pp_name"])
                     else:
-                        dct = MappingItem(pp_type, dct["gnc_account_names"])
+                        dct = MappingItem(type, dct["gnc_account_names"])
                 except ValueError:
                     print(f"Invalid item: {dct}")
                     dct = None
@@ -126,14 +135,13 @@ class ConfigFile(IConfigHandler):
 
             return dct
 
-        if conf.filename is not None:
-            with open(conf.filename, 'r') as f:
-                json_conf = json.load(f, object_hook=item_decoder)
-                conf.items = json_conf["items"]
-                # ToDo: Sanity check of the items
+        with open(conf.filename, 'r') as f:
+            json_conf = json.load(f, object_hook=item_decoder)
+            conf.items = json_conf["items"]
+            # ToDo: Sanity check of the items
 
-                if conf.gnc_object is not None and json_conf["gnc_object"] is not None:
-                    conf.gnc_object = json_conf["gnc_object"]
+            if conf.gnc_object is None and json_conf["gnc_object"] is not None:
+                conf.gnc_object = json_conf["gnc_object"]
 
 
 class ConfigurationFactory(object):
