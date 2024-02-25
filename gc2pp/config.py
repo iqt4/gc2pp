@@ -4,7 +4,8 @@ import enum
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import date, timedelta, MINYEAR
+from datetime import date, timedelta
+from dateutil.parser import parse as dateparse
 from pathlib import Path
 from urllib.parse import urlparse
 from book import GncType, GncObject
@@ -42,9 +43,16 @@ class Configuration(object):
         """We need configuration parameters"""
         # configuration filename
         self.filename = None
-        self.date: date = date(MINYEAR, 1, 1)
+        self.date: date = None
         self.items: dict[MappingItem] = {}
         self.gnc_object: GncObject = None
+    
+    def is_valid(self) -> bool:
+        """Validate completeness"""
+        if self.filename is None or self.date is None or self.items is None or self.gnc_object is None:
+            return False
+        
+        return True
 
 
 class IConfigHandler(ABC):
@@ -65,10 +73,11 @@ class IConfigHandler(ABC):
 
 
 class ConfigDefault(IConfigHandler):
-    """Safe default parameters"""
+    """Validate parameters"""
 
     def _handle(self, conf: Configuration):
-        conf.date = date.today() - timedelta(days=30)
+        if conf.date is None:
+            conf.date = date.today() - timedelta(days=30)
 
 
 class ConfigCommandLine(IConfigHandler):
@@ -77,7 +86,7 @@ class ConfigCommandLine(IConfigHandler):
     def _handle(self, conf: Configuration):
         parser = argparse.ArgumentParser(description='Convert Gnucash file to Portfolio Performance CSV')
         parser.add_argument('-c', '--conf', help='Configuration file', default='./data/gc2pp.json')
-        parser.add_argument('-u', '--uri', help='Gnucash source format [file://filename]')
+        parser.add_argument('-u', '--url', help='Gnucash source format [file://filename]')
         parser.add_argument('-d', '--date', help='First conversion date')
         args = parser.parse_args()
 
@@ -88,10 +97,10 @@ class ConfigCommandLine(IConfigHandler):
         else:
             raise FileNotFoundError
 
-        if args.uri is not None:
+        if args.url is not None:
             # ToDo only xml is valid for now. See https://www.gnucash.org/docs/v5/C/gnucash-guide/basics-files1.html
-            url = urlparse(args.uri, scheme='xml')
-            if url.scheme == 'xml':
+            url = urlparse(args.url, scheme='file')
+            if url.scheme == 'file':
                 filename = Path(url.path).resolve()
                 if filename.is_file():
                     conf.gnc_object = GncObject(gnc_type=GncType.XML, filename=filename)
@@ -101,8 +110,7 @@ class ConfigCommandLine(IConfigHandler):
                 raise ValueError(url)
 
         if args.date is not None:
-            # ToDo: Implement date parameter
-            pass
+            conf.date = dateparse(args.date).date
 
 
 class ConfigFile(IConfigHandler):
@@ -143,15 +151,23 @@ class ConfigFile(IConfigHandler):
             if conf.gnc_object is None and json_conf["gnc_object"] is not None:
                 conf.gnc_object = json_conf["gnc_object"]
 
+            if conf.date is None and json_conf["due_date"] is not None:
+                conf.date = dateparse(json_conf["due_date"]).date
+
 
 class ConfigurationFactory(object):
 
     @staticmethod
     def load() -> Configuration:
         c = Configuration()
+        # First read the command line, then the configuration file
+        # Finally set default values
         handler = ConfigCommandLine(ConfigFile(ConfigDefault(None)))
         handler.handle(c)
-        return c
+        if c.is_valid():
+            return c
+        else:
+            return None
 
 
 if __name__ == '__main__':
