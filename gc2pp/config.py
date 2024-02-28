@@ -148,10 +148,10 @@ class ConfigFile(IConfigHandler):
             conf.items = json_conf["items"]
             # ToDo: Sanity check of the items
 
-            if conf.gnc_object is None and json_conf["gnc_object"] is not None:
+            if conf.gnc_object is None and "gnc_object" in json_conf:
                 conf.gnc_object = json_conf["gnc_object"]
 
-            if conf.date is None and json_conf["due_date"] is not None:
+            if conf.date is None and "due_date" in json_conf:
                 conf.date = dateparse(json_conf["due_date"]).date
 
 
