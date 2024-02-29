@@ -112,3 +112,7 @@ class GncBook(ABC):
     @abstractmethod
     def accounts(self) -> list[GncAccount]:
         pass
+
+    @abstractmethod
+    def find_account_by_name(self, fullname: str) -> GncAccount:
+        pass
