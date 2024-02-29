@@ -8,11 +8,11 @@ from .gnc_book import GncBook, GncCommodity, GncAccount, GncSplit, GncTransactio
 
 
 class XMLCommodity(GncCommodity):
-    _commodity_index: dict[gnucashxml.Commodity, XMLCommodity] = {}
+#    _commodity_index: dict[gnucashxml.Commodity, XMLCommodity] = {}
 
     def __init__(self, gnc_cmdty: gnucashxml.Commodity):
         self._commodity = gnc_cmdty
-        self._commodity_index.setdefault(gnc_cmdty, self)
+#        self._commodity_index.setdefault(gnc_cmdty, self)
 
     @property
     def space(self) -> str:
@@ -30,17 +30,17 @@ class XMLCommodity(GncCommodity):
     def xcode(self) -> str:
         return self._commodity.xcode
 
-    @classmethod
-    def get_commodity(cls, gnc_cmdty) -> XMLCommodity:
-        return cls._commodity_index.get(gnc_cmdty)
+    # @classmethod
+    # def get_commodity(cls, gnc_cmdty) -> XMLCommodity:
+    #     return cls._commodity_index.get(gnc_cmdty)
 
 
 class XMLAccount(GncAccount):
-    _account_index: dict[gnucashxml.Account, XMLAccount] = {}
+#    _account_index: dict[gnucashxml.Account, XMLAccount] = {}
 
     def __init__(self, gnc_act: gnucashxml.Account) -> None:
         self._account: gnucashxml.Account = gnc_act
-        self._account_index.setdefault(gnc_act, self)
+#        self._account_index.setdefault(gnc_act, self)
 
     @property
     def name(self):
@@ -56,19 +56,19 @@ class XMLAccount(GncAccount):
 
     @property
     def commodity(self) -> GncCommodity:
-        return XMLCommodity.get_commodity(self._account.commodity)
+        return XMLBook.get_commodity(self._account.commodity)
 
     @property
     def children(self) -> list[GncAccount]:
-        return [self.get_account(a) for a in self._account.children]
+        return [XMLBook.get_account(a) for a in self._account.children]
 
     @property
     def splits(self) -> list[GncSplit]:
         return [XMLSplit(a) for a in self._account.splits]
 
-    @classmethod
-    def get_account(cls, gnc_act) -> GncAccount:
-        return cls._account_index.get(gnc_act)
+    # @classmethod
+    # def get_account(cls, gnc_act) -> GncAccount:
+    #     return cls._account_index.get(gnc_act)
 
 
 @lru_cache()
@@ -82,7 +82,7 @@ class XMLSplit(GncSplit):
 
     @property
     def account(self) -> GncAccount:
-        return XMLAccount.get_account(self._gnc_split.account)
+        return XMLBook.get_account(self._gnc_split.account)
 
     @property
     def value(self) -> Decimal:
@@ -116,11 +116,14 @@ class XMLBook(GncBook):
     The XMLAdapter reads GNUCash XML files and makes it compatible with the gncBook
     interface via composition.
     """
+    _account_index: dict[gnucashxml.Account, XMLAccount] = {}
+    _commodity_index: dict[gnucashxml.Commodity, XMLCommodity] = {}
+
 
     def __init__(self, xml_filename: str) -> None:
         self._book: gnucashxml.Book = gnucashxml.load(xml_filename)
-        self._commodities = [XMLCommodity(c) for c in self._book.commodities]
-        self._accounts = [XMLAccount(a) for a in self._book.accounts]
+        self._commodities = [XMLBook.get_commodity(c) for c in self._book.commodities]
+        self._accounts = [XMLBook.get_account(a) for a in self._book.accounts]
 
     @property
     def commodities(self) -> list[GncCommodity]:
@@ -129,3 +132,20 @@ class XMLBook(GncBook):
     @property
     def accounts(self) -> list[GncAccount]:
         return self._accounts
+
+    @classmethod
+    
+    def get_account(cls, xml_act) -> GncAccount:
+        "Return an XMLAccount instance based on the related gnucashxml.Account instance"
+        if xml_act not in cls._account_index:
+            cls._account_index[xml_act] = XMLAccount(xml_act)
+       
+        return cls._account_index.get(xml_act)
+    
+    @classmethod
+    def get_commodity(cls, xml_cmdty) -> XMLCommodity:
+        "Return an XMLCommodity instance based on the related gnucashxml.Commodity instance"
+        if xml_cmdty not in cls._commodity_index:
+            cls._commodity_index[xml_cmdty] = XMLCommodity(xml_cmdty)
+    
+        return cls._commodity_index.get(xml_cmdty)  
